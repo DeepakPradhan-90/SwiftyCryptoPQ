@@ -1,6 +1,13 @@
 # SwiftyCryptoPQ
 
-A Swift wrapper around optimized, FIPS-compliant post-quantum and classical cryptographic primitives, leveraging the robust C implementations under the hood.
+A Swift wrapper that implements the FIPS 203 and FIPS 204 post-quantum algorithms, alongside
+classical primitives, over well-reviewed C reference implementations.
+
+> **Not a validated cryptographic module.** This package implements the algorithms specified
+> in FIPS 203 and FIPS 204, and its conformance is tested against NIST's ACVP vectors, but it
+> has not been through CMVP validation and is therefore not FIPS 140-3 validated. If you have
+> a regulatory requirement for a validated module, this will not satisfy it. The code has also
+> not had an independent security audit.
 
 ## Features
 
