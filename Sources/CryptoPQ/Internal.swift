@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
-import CryptoPQC
+import Security
+internal import CryptoPQC
 
 /// FIPS 202 primitives, backed by the vendored reference implementation so that
 /// they are available on every supported OS version.

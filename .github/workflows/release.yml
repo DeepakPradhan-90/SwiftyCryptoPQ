@@ -1,0 +1,23 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: XCFramework release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Build and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: Scripts/publish-release.sh

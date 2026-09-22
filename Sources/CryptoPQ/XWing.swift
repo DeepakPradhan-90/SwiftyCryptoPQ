@@ -1,6 +1,6 @@
 import Foundation
 import CryptoKit
-import CryptoPQC
+internal import CryptoPQC
 
 public enum XWingError: Error, LocalizedError {
     case keyGenerationFailed

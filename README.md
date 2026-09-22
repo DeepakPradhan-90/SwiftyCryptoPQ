@@ -38,7 +38,7 @@ requirement of Apple's own CryptoKit implementations: the lattice primitives are
 
 ## Installation
 
-Add SwiftyCryptoPQ to your `Package.swift` dependencies:
+Version tags ship a precompiled XCFramework. Add the package and the `CryptoPQ` product:
 
 ```swift
 dependencies: [
@@ -46,18 +46,21 @@ dependencies: [
 ]
 ```
 
-Then add `CryptoPQ` to your target dependencies:
+```swift
+.product(name: "CryptoPQ", package: "SwiftyCryptoPQ")
+```
+
+Each merge to `main` publishes the next patch release. The tag's `Package.swift` is a binary target, and the XCFramework zip is attached to the GitHub release. It contains iOS, iOS Simulator, and macOS slices.
+
+To build from source instead, depend on the `main` branch:
 
 ```swift
-targets: [
-    .target(
-        name: "MyTarget",
-        dependencies: [
-            .product(name: "CryptoPQ", package: "SwiftyCryptoPQ")
-        ]
-    )
-]
+.package(url: "https://github.com/DeepakPradhan-90/SwiftyCryptoPQ.git", branch: "main")
 ```
+
+## Contributing
+
+`main` accepts changes only through pull requests. A pull request runs the macOS tests and the iOS build, and a Cursor review agent comments on the diff with those check results. Merge it from GitHub after you have read the review. Merging publishes the next XCFramework release.
 
 ---
 

@@ -1,5 +1,5 @@
 import Foundation
-import CryptoPQC
+internal import CryptoPQC
 
 public enum MLKEMError: Error, LocalizedError {
     case keyGenerationFailed

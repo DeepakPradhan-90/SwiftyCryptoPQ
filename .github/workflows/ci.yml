@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Test (macOS)
@@ -23,3 +26,33 @@ jobs:
         run: xcodebuild -scheme SwiftyCryptoPQ -destination 'generic/platform=iOS' build
       - name: Build the iOS demo
         run: xcodebuild -project Examples/CryptoPQDemo/CryptoPQDemo.xcodeproj -scheme CryptoPQDemo -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
+
+  review:
+    name: Code review
+    if: always() && github.event_name == 'pull_request'
+    needs: [test, build-ios]
+    runs-on: macos-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: .github/review/package-lock.json
+      - name: Install the review agent
+        working-directory: .github/review
+        run: npm ci
+      - name: Review the pull request
+        working-directory: .github/review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEST_RESULT: ${{ needs.test.result }}
+          BUILD_RESULT: ${{ needs.build-ios.result }}
+        run: node review-pr.mjs

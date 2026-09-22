@@ -1,5 +1,9 @@
 # Swift Package Manager
 .build/
+build/
+
+# Review agent dependencies
+.github/review/node_modules/
 .swiftpm/xcode/xcuserdata/
 .swiftpm/xcode/package.xcworkspace/xcuserdata/
 Package.resolved
