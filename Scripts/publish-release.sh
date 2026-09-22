@@ -14,9 +14,16 @@ cd "$ROOT"
 
 REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-# Paths that cannot change what a consumer receives. A merge touching only
-# these is not worth a version number.
-IRRELEVANT='^(Examples/|.*\.md$)'
+# Paths that can change what a consumer receives: the library, the vendored C
+# and its patches, the manifest, the script that builds the framework, and the
+# notices shipped alongside it. A merge touching none of these produces a
+# byte-for-byte equivalent package, so it is not worth a version number.
+#
+# This is an allowlist rather than a list of things to ignore, so that a path
+# nobody thought about does not quietly publish a release. The cost is that a
+# new source location has to be added here, which the skip message makes
+# obvious by naming the files it disregarded.
+RELEVANT='^(Sources/|patches/|Package\.swift$|Scripts/make-xcframework\.sh$|LICENSE$|NOTICE$)'
 
 note() {
   echo "$1"
@@ -41,10 +48,12 @@ RELEASED_SHA="$(printf '%s\n' "$RELEASE_BODIES" |
 # With no previous release there is no baseline to compare against, and the
 # first release has to happen regardless. A baseline that is missing from the
 # history, after a force push say, is treated the same way.
-if [ -n "$RELEASED_SHA" ] && git cat-file -e "${RELEASED_SHA}^{commit}" 2>/dev/null; then
+if [ "${FORCE:-false}" = "true" ]; then
+  note "Publishing regardless of which paths changed, because this run was started by hand."
+elif [ -n "$RELEASED_SHA" ] && git cat-file -e "${RELEASED_SHA}^{commit}" 2>/dev/null; then
   CHANGED="$(git diff --name-only "$RELEASED_SHA" "$SOURCE_SHA")"
-  if [ -z "$CHANGED" ] || ! printf '%s\n' "$CHANGED" | grep -qvE "$IRRELEVANT"; then
-    note "Nothing outside documentation and examples changed since ${RELEASED_SHA}, so no release. Files: $(printf '%s' "$CHANGED" | tr '\n' ' ')"
+  if ! printf '%s\n' "$CHANGED" | grep -qE "$RELEVANT"; then
+    note "No release: nothing that affects the published package changed since ${RELEASED_SHA}. Disregarded $(printf '%s' "$CHANGED" | tr '\n' ' ')"
     exit 0
   fi
 fi
@@ -132,7 +141,9 @@ if git ls-remote --exit-code --heads "$REMOTE" binary >/dev/null 2>&1; then
   git fetch -q "$REMOTE" binary
   git checkout -q -B binary FETCH_HEAD
 fi
-cp "$STAGE/Package.swift" "$ROOT/LICENSE" .
+# Apache 2.0 section 4(d) requires the NOTICE file to travel with
+# redistributions, and the binary package is a redistribution.
+cp "$STAGE/Package.swift" "$ROOT/LICENSE" "$ROOT/NOTICE" .
 git add -A
 git -c user.name="github-actions[bot]" \
   -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
