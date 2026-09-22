@@ -60,7 +60,22 @@ To build from source instead, depend on the `main` branch:
 
 ## Contributing
 
-`main` accepts changes only through pull requests. A pull request runs the macOS tests and the iOS build, and a Cursor review agent comments on the diff with those check results. Merge it from GitHub after you have read the review. Merging publishes the next XCFramework release.
+`main` accepts changes only through pull requests. Three checks must pass before GitHub offers the merge button:
+
+| Check | What it does |
+| --- | --- |
+| Test (macOS) | `swift test`, including the ACVP and X-Wing known-answer tests |
+| Build (iOS) | Builds the library and the demo app for iOS |
+| XCFramework | Builds the release XCFramework and runs real operations through the binary |
+
+Two reviewers then comment on the diff: GitHub Copilot, requested automatically by a repository ruleset, and a Cursor agent that also reports the check results. Neither can approve or merge. Read them, then merge from GitHub yourself.
+
+Both reviewers need to be provisioned, and the pull request still works without them:
+
+- The Cursor agent needs a `CURSOR_API_KEY` repository secret. Without it the job posts the check results and says the agent did not run.
+- Copilot code review needs Copilot Pro or above on the account opening the pull request. Copilot Free does not include it, and the request is silently dropped rather than failing.
+
+A release is published only after CI succeeds on `main`, so a merge that breaks the build produces no release. A merge that changes nothing outside Markdown files and `Examples/` is also skipped, since it cannot change what a consumer receives. The release job says which of the two applies in its summary.
 
 ---
 

@@ -5,6 +5,7 @@ const pr = process.env.PR_NUMBER;
 const apiKey = process.env.CURSOR_API_KEY;
 const testResult = process.env.TEST_RESULT ?? "unknown";
 const buildResult = process.env.BUILD_RESULT ?? "unknown";
+const xcframeworkResult = process.env.XCFRAMEWORK_RESULT ?? "unknown";
 
 if (!pr) {
   console.error("PR_NUMBER is required");
@@ -24,8 +25,11 @@ function post(body) {
 }
 
 const status = [
-  `Test (macOS): ${testResult}`,
-  `Build (iOS): ${buildResult}`,
+  `| Check | Result |`,
+  `| --- | --- |`,
+  `| Test (macOS) | ${testResult} |`,
+  `| Build (iOS) | ${buildResult} |`,
+  `| XCFramework | ${xcframeworkResult} |`,
 ].join("\n");
 
 if (!apiKey) {
@@ -43,7 +47,8 @@ if (!apiKey) {
   process.exit(0);
 }
 
-const diff = gh(["pr", "diff", pr, "--", ":!Sources/CryptoPQC"]);
+// The vendored C is thousands of lines and is not what a reviewer should read.
+const diff = gh(["pr", "diff", pr, "--exclude", "Sources/CryptoPQC/**"]);
 const clipped = diff.length > 120_000 ? `${diff.slice(0, 120_000)}\n\n[diff truncated]` : diff;
 
 const prompt = `Review this pull request for SwiftyCryptoPQ, a Swift package implementing ML-KEM, ML-DSA, and X-Wing.

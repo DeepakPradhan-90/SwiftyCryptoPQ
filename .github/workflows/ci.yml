@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+# Superseded pull request runs are pointless; runs on main gate the release
+# and must finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     name: Test (macOS)
@@ -27,11 +33,28 @@ jobs:
       - name: Build the iOS demo
         run: xcodebuild -project Examples/CryptoPQDemo/CryptoPQDemo.xcodeproj -scheme CryptoPQDemo -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
 
+  # Releases ship a precompiled binary, so packaging is verified here rather
+  # than discovered after a merge.
+  xcframework:
+    name: XCFramework
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the XCFramework
+        run: Scripts/make-xcframework.sh build/CryptoPQ.xcframework
+      - name: Verify it works
+        run: Scripts/verify-xcframework.sh build/CryptoPQ.xcframework
+
   review:
     name: Code review
-    if: always() && github.event_name == 'pull_request'
-    needs: [test, build-ios]
-    runs-on: macos-latest
+    # Runs even when the checks above fail, because the review reports their
+    # result. A fork pull request has neither the secret nor write access.
+    if: >-
+      !cancelled() &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    needs: [test, build-ios, xcframework]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
@@ -55,4 +78,5 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           TEST_RESULT: ${{ needs.test.result }}
           BUILD_RESULT: ${{ needs.build-ios.result }}
+          XCFRAMEWORK_RESULT: ${{ needs.xcframework.result }}
         run: node review-pr.mjs
