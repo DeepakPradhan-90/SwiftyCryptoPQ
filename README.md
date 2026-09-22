@@ -75,7 +75,9 @@ Both reviewers need to be provisioned, and the pull request still works without 
 - The Cursor agent needs a `CURSOR_API_KEY` repository secret. Without it the job posts the check results and says the agent did not run.
 - Copilot code review needs Copilot Pro or above on the account opening the pull request. Copilot Free does not include it, and the request is silently dropped rather than failing.
 
-A release is published only after CI succeeds on `main`, so a merge that breaks the build produces no release.
+These checks run on pull requests only. A merge does not repeat the iOS builds or the review, because a pull request has to be up to date with `main` before it can merge, so those already ran against the content `main` ends up with.
+
+Merging runs the release, which publishes only if the tests pass on the merged commit and the XCFramework it builds verifies. The tests are the one thing worth running twice: a published version is permanent, and the known-answer tests are what make it trustworthy.
 
 A merge is also skipped unless it touches something that can change the published package: `Sources/`, `patches/`, `Package.swift`, `Scripts/make-xcframework.sh`, `LICENSE`, or `NOTICE`. Changes to tests, examples, documentation, or CI therefore do not consume a version number. The release job names the files it disregarded in its summary, so a skip is never silent — if you add a new source location, add it to `RELEVANT` in `Scripts/publish-release.sh`.
 

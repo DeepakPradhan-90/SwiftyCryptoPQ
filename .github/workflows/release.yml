@@ -1,16 +1,17 @@
 name: Release
 
-# Triggered by a successful CI run rather than by the merge itself, so a
-# release can only come from a commit whose tests, iOS build, and XCFramework
-# verification all passed.
+# Runs on the merge itself. The iOS builds and the review are not repeated
+# here, because the ruleset requires a pull request to be up to date with main
+# before it can merge, so they ran against this same content. The tests are
+# repeated, because a published version is permanent and the known-answer
+# tests are what make it trustworthy. Nothing is published unless they pass
+# and the XCFramework verifies.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  push:
     branches: [main]
   # A change to how the package is assembled rather than to what it contains,
   # correcting the notices shipped alongside the binary say, is not visible to
-  # the path rule below. Run this by hand to publish one.
+  # the path rule in the script. Run this by hand to publish one.
   workflow_dispatch:
 
 permissions:
@@ -25,22 +26,24 @@ concurrency:
 jobs:
   release:
     name: XCFramework release
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push')
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
           fetch-tags: true
+
+      # The ACVP and X-Wing known-answer tests are the strongest correctness
+      # evidence in the repository, and a published version is permanent. They
+      # run here against the exact commit being released, even though the same
+      # tests already passed on the pull request.
+      - name: Run tests
+        run: swift test
 
       - name: Build and publish
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          SOURCE_SHA: ${{ github.sha }}
           # A manual run skips the path rule, but still has to build and pass
           # verification before anything is published.
           FORCE: ${{ github.event_name == 'workflow_dispatch' }}

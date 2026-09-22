@@ -1,18 +1,19 @@
 name: CI
 
+# Pull requests only. A merge does not re-run these, because the ruleset
+# requires a pull request to be up to date with main before merging, so these
+# checks already ran against the content main ends up with. Repeating them
+# would spend macOS minutes to learn nothing.
 on:
-  push:
-    branches: [main]
   pull_request:
 
 permissions:
   contents: read
 
-# Superseded pull request runs are pointless; runs on main gate the release
-# and must finish.
+# A superseded run tells you about code nobody is going to merge.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -51,7 +52,6 @@ jobs:
     # result. A fork pull request has neither the secret nor write access.
     if: >-
       !cancelled() &&
-      github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository
     needs: [test, build-ios, xcframework]
     runs-on: ubuntu-latest
