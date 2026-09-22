@@ -20,6 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Build for iOS
-        run: xcodebuild -scheme CryptoPQ -destination 'generic/platform=iOS' build
+        run: xcodebuild -scheme SwiftyCryptoPQ -destination 'generic/platform=iOS' build
       - name: Build the iOS demo
         run: xcodebuild -project Examples/CryptoPQDemo/CryptoPQDemo.xcodeproj -scheme CryptoPQDemo -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
