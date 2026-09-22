@@ -97,29 +97,132 @@ try privateKey.withUnsafeRawRepresentation { bytes in
 Decoding a public key runs the FIPS 203 §7.2 modulus check, and decoding a private key runs
 the §7.3 hash check, so malformed keys are rejected at the boundary rather than used.
 
-### CryptoKit `KEM` conformance
+### Choosing an API for your deployment target
 
-On iOS 17+/macOS 14+, every family conforms to CryptoKit's `KEMPublicKey` and `KEMPrivateKey`,
-so these keys drop into generic code written against CryptoKit rather than against this
-package:
+The key types are identical on every supported version. Only the CryptoKit protocol
+conformance is version-gated, because the protocols themselves did not exist until iOS 17:
+
+| API | Available from |
+| --- | --- |
+| `PQ.*.PrivateKey` / `PublicKey`, `encapsulateSharedSecret()`, `decapsulate(_:)` | iOS 15 / macOS 11 |
+| `KEMPublicKey` & `KEMPrivateKey` conformance, `encapsulate()`, `Encapsulation.kemResult` | iOS 17 / macOS 14 |
+| Apple's own `CryptoKit.MLKEM768` etc., at which point this package is optional | iOS 26 / macOS 26 |
+
+If your floor is below iOS 17, use `encapsulateSharedSecret()` everywhere: it is available on
+all versions, including 17 and later, so you need no availability checks at all. Reach for the
+protocol conformance only when you want to write code generic over CryptoKit's KEM
+abstraction.
+
+A KEM gives you a shared secret, not a cipher, so both examples below run the secret through
+HKDF and encrypt with AES-GCM. Both are the [tested
+code](Tests/CryptoPQTests/DocumentedUsageTests.swift) rather than a sketch.
+
+### Below iOS 17 — end-to-end with AES-GCM
 
 ```swift
-func establish<K: KEMPrivateKey>(using privateKey: K) throws -> SymmetricKey {
-    let result = try privateKey.publicKey.encapsulate()   // KEM.EncapsulationResult
-    return try privateKey.decapsulate(result.encapsulated)
-}
+import CryptoPQ
+import CryptoKit
 
-let secret = try establish(using: PQ.MLKEM768.PrivateKey())
+// Bind the KDF to your protocol and version so keys derived by different
+// features can never collide.
+let info = Data("MyApp/messaging/v1".utf8)
+
+// --- Recipient, once: generate and publish a key ---
+let recipientKey = try PQ.XWing.PrivateKey()
+let publishedKey = recipientKey.publicKey.rawRepresentation   // 1216 bytes, not secret
+
+// --- Sender: encapsulate, derive, encrypt ---
+let publicKey = try PQ.XWing.PublicKey(rawRepresentation: publishedKey)
+let encapsulation = try publicKey.encapsulateSharedSecret()
+
+let aesKey = HKDF<SHA256>.deriveKey(
+    inputKeyMaterial: encapsulation.sharedSecret,   // already a SymmetricKey
+    info: info,
+    outputByteCount: 32
+)
+let box = try AES.GCM.seal(plaintext, using: aesKey)
+
+// Send both: the KEM ciphertext carries the shared secret, the box the message.
+let kemCiphertext = encapsulation.ciphertext        // 1120 bytes for X-Wing
+let sealedBox = box.combined!
+
+// --- Recipient: decapsulate, derive the same key, decrypt ---
+let sharedSecret = try recipientKey.decapsulate(kemCiphertext)
+let openingKey = HKDF<SHA256>.deriveKey(
+    inputKeyMaterial: sharedSecret,
+    info: info,
+    outputByteCount: 32
+)
+let recovered = try AES.GCM.open(AES.GCM.SealedBox(combined: sealedBox), using: openingKey)
 ```
 
-Below iOS 17 the same types work through `encapsulateSharedSecret()` and `decapsulate(_:)`;
-only the protocol conformance is version-gated.
+Encapsulate once per message. The shared secret is fresh every call, so the derived AES key is
+too, which is what keeps GCM's nonce reuse requirement out of your hands.
 
-The names under `PQ` mirror CryptoKit's own `MLKEM768`, `MLKEM1024`, and
-`XWingMLKEM768X25519`, which arrive in iOS 26. The encodings are the same standards, and the
-test suite verifies that ciphertexts cross between this package and CryptoKit's native
-ML-KEM-768 in both directions — so raising your deployment target later is mostly a matter of
-dropping the `PQ.` prefix.
+### iOS 17+ — generic over CryptoKit's KEM protocols
+
+With an iOS 17 floor you can write against `KEMPublicKey` and `KEMPrivateKey` and never name a
+concrete algorithm, which keeps the choice of family a one-line change:
+
+```swift
+import CryptoPQ
+import CryptoKit
+
+let info = Data("MyApp/messaging/v1".utf8)
+
+func seal<K: KEMPublicKey>(_ plaintext: Data, to publicKey: K) throws -> (kem: Data, box: Data) {
+    let result = try publicKey.encapsulate()        // KEM.EncapsulationResult
+    let aesKey = HKDF<SHA256>.deriveKey(
+        inputKeyMaterial: result.sharedSecret,
+        info: info,
+        outputByteCount: 32
+    )
+    let box = try AES.GCM.seal(plaintext, using: aesKey)
+    return (result.encapsulated, box.combined!)
+}
+
+func open<K: KEMPrivateKey>(kem: Data, box: Data, with privateKey: K) throws -> Data {
+    let sharedSecret = try privateKey.decapsulate(kem)
+    let aesKey = HKDF<SHA256>.deriveKey(
+        inputKeyMaterial: sharedSecret,
+        info: info,
+        outputByteCount: 32
+    )
+    return try AES.GCM.open(AES.GCM.SealedBox(combined: box), using: aesKey)
+}
+
+// Swapping families, or moving to Apple's implementation later, touches one line:
+let recipientKey = try PQ.XWing.PrivateKey()
+let message = try seal(plaintext, to: recipientKey.publicKey)
+let recovered = try open(kem: message.kem, box: message.box, with: recipientKey)
+```
+
+Those same two functions accept CryptoKit's native `MLKEM768` and `XWingMLKEM768X25519` keys
+unchanged on iOS 26+, which the test suite verifies.
+
+If your floor is below iOS 17 but you still want the generic form, gate it and fall back to
+`encapsulateSharedSecret()`:
+
+```swift
+if #available(iOS 17.0, macOS 14.0, *) {
+    return try seal(plaintext, to: recipientKey.publicKey)
+} else {
+    return try sealUsingSharedSecret(plaintext, to: recipientKey.publicKey)
+}
+```
+
+### Migrating to Apple's implementation later
+
+The names under `PQ` mirror CryptoKit's `MLKEM768`, `MLKEM1024`, and `XWingMLKEM768X25519`,
+which arrive in iOS 26, and the encodings are the same standards. The test suite confirms that
+ML-KEM-768 ciphertexts cross between this package and CryptoKit's native implementation in
+both directions, and that a message sealed with `PQ.XWing` opens under
+`CryptoKit.XWingMLKEM768X25519`. So keys already stored on device stay valid, mixed-version
+deployments interoperate, and raising your target is largely a matter of dropping the `PQ.`
+prefix.
+
+The one exception is ML-DSA: Apple exposes it only inside the Secure Enclave, so the `MLDSA`
+API here remains useful even on iOS 26.
 
 ---
 
