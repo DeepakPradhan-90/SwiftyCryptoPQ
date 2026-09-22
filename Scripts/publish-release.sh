@@ -14,9 +14,39 @@ cd "$ROOT"
 
 REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-if gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[].body' | grep -F "Source-SHA: ${SOURCE_SHA}" >/dev/null; then
-  echo "Release already exists for ${SOURCE_SHA}"
+# Paths that cannot change what a consumer receives. A merge touching only
+# these is not worth a version number.
+IRRELEVANT='^(Examples/|.*\.md$)'
+
+note() {
+  echo "$1"
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    echo "$1" >>"$GITHUB_STEP_SUMMARY"
+  fi
+}
+
+# Newest first, so the first Source-SHA is the commit the last release was
+# built from. GitHub returns these bodies with CRLF line endings, which would
+# otherwise defeat the anchored match below.
+RELEASE_BODIES="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[].body' | tr -d '\r')"
+
+if printf '%s\n' "$RELEASE_BODIES" | grep -Fq "Source-SHA: ${SOURCE_SHA}"; then
+  note "Release already exists for ${SOURCE_SHA}."
   exit 0
+fi
+
+RELEASED_SHA="$(printf '%s\n' "$RELEASE_BODIES" |
+  sed -n 's/^Source-SHA: \([0-9a-f]\{40\}\)$/\1/p' | head -1)"
+
+# With no previous release there is no baseline to compare against, and the
+# first release has to happen regardless. A baseline that is missing from the
+# history, after a force push say, is treated the same way.
+if [ -n "$RELEASED_SHA" ] && git cat-file -e "${RELEASED_SHA}^{commit}" 2>/dev/null; then
+  CHANGED="$(git diff --name-only "$RELEASED_SHA" "$SOURCE_SHA")"
+  if [ -z "$CHANGED" ] || ! printf '%s\n' "$CHANGED" | grep -qvE "$IRRELEVANT"; then
+    note "Nothing outside documentation and examples changed since ${RELEASED_SHA}, so no release. Files: $(printf '%s' "$CHANGED" | tr '\n' ' ')"
+    exit 0
+  fi
 fi
 
 VERSION="$(python3 - <<'PY'

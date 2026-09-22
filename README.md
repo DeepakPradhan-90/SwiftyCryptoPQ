@@ -75,7 +75,7 @@ Both reviewers need to be provisioned, and the pull request still works without 
 - The Cursor agent needs a `CURSOR_API_KEY` repository secret. Without it the job posts the check results and says the agent did not run.
 - Copilot code review needs Copilot Pro or above on the account opening the pull request. Copilot Free does not include it, and the request is silently dropped rather than failing.
 
-A release is published only after CI succeeds on `main`, so a merge that breaks the build produces no release.
+A release is published only after CI succeeds on `main`, so a merge that breaks the build produces no release. A merge that changes nothing outside Markdown files and `Examples/` is also skipped, since it cannot change what a consumer receives. The release job says which of the two applies in its summary.
 
 ---
 
