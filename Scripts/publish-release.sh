@@ -9,13 +9,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 : "${GH_TOKEN:?GH_TOKEN is required}"
-: "${GITHUB_SHA:?GITHUB_SHA is required}"
+: "${SOURCE_SHA:?SOURCE_SHA is required}"
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 
 REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-if gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[].body' | grep -F "Source-SHA: ${GITHUB_SHA}" >/dev/null; then
-  echo "Release already exists for ${GITHUB_SHA}"
+if gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[].body' | grep -F "Source-SHA: ${SOURCE_SHA}" >/dev/null; then
+  echo "Release already exists for ${SOURCE_SHA}"
   exit 0
 fi
 
@@ -36,12 +36,20 @@ else:
 PY
 )"
 
-echo "Releasing ${VERSION} from ${GITHUB_SHA}"
+if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null || \
+   git ls-remote --exit-code --tags "$REMOTE" "refs/tags/${VERSION}" >/dev/null 2>&1; then
+  echo "Tag ${VERSION} already exists" >&2
+  exit 1
+fi
+
+echo "Releasing ${VERSION} from ${SOURCE_SHA}"
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
 VERSION="$VERSION" Scripts/make-xcframework.sh "$STAGE/CryptoPQ.xcframework"
+Scripts/verify-xcframework.sh "$STAGE/CryptoPQ.xcframework"
+
 ditto -c -k --keepParent "$STAGE/CryptoPQ.xcframework" "$STAGE/CryptoPQ.xcframework.zip"
 CHECKSUM="$(swift package compute-checksum "$STAGE/CryptoPQ.xcframework.zip")"
 URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}/CryptoPQ.xcframework.zip"
@@ -80,31 +88,34 @@ Precompiled CryptoPQ ${VERSION}.
 .package(url: "https://github.com/${GITHUB_REPOSITORY}.git", from: "${VERSION}")
 \`\`\`
 
-The \`${VERSION}\` tag is a Swift package whose only target is this XCFramework. Source builds stay on the \`main\` branch.
+The \`${VERSION}\` tag is a Swift package whose only target is this XCFramework, built for iOS, the iOS Simulator, and macOS. Source builds stay on the \`main\` branch.
 
-Source-SHA: ${GITHUB_SHA}
+Source-SHA: ${SOURCE_SHA}
 EOF
 
+# The binary package lives on its own branch so that main stays buildable from
+# source and the tag still resolves to a Package.swift.
 GIT="$STAGE/git"
-git init -b binary "$GIT"
+git init -q -b binary "$GIT"
 cd "$GIT"
-if git ls-remote --exit-code --heads "$REMOTE" binary >/dev/null; then
-  git fetch "$REMOTE" binary
-  git checkout -B binary FETCH_HEAD
+if git ls-remote --exit-code --heads "$REMOTE" binary >/dev/null 2>&1; then
+  git fetch -q "$REMOTE" binary
+  git checkout -q -B binary FETCH_HEAD
 fi
 cp "$STAGE/Package.swift" "$ROOT/LICENSE" .
 git add -A
 git -c user.name="github-actions[bot]" \
   -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-  commit -m "Release CryptoPQ ${VERSION} binary package"
-git tag "$VERSION"
-git push "$REMOTE" HEAD:refs/heads/binary
-git push "$REMOTE" "refs/tags/${VERSION}"
+  commit -q -m "Release CryptoPQ ${VERSION} binary package"
+git push -q "$REMOTE" HEAD:refs/heads/binary
+BINARY_SHA="$(git rev-parse HEAD)"
 
+# Creating the release also creates the tag, so a partial publish cannot leave
+# a version tag that Swift Package Manager resolves to a missing asset.
 gh release create "$VERSION" "$STAGE/CryptoPQ.xcframework.zip" \
   --repo "$GITHUB_REPOSITORY" \
   --title "$VERSION" \
   --notes-file "$NOTES" \
-  --target "$(git rev-parse HEAD)"
+  --target "$BINARY_SHA"
 
 echo "Published ${VERSION}"

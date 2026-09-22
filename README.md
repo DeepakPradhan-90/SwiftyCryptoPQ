@@ -60,7 +60,17 @@ To build from source instead, depend on the `main` branch:
 
 ## Contributing
 
-`main` accepts changes only through pull requests. A pull request runs the macOS tests and the iOS build, and a Cursor review agent comments on the diff with those check results. Merge it from GitHub after you have read the review. Merging publishes the next XCFramework release.
+`main` accepts changes only through pull requests. Three checks must pass before GitHub offers the merge button:
+
+| Check | What it does |
+| --- | --- |
+| Test (macOS) | `swift test`, including the ACVP and X-Wing known-answer tests |
+| Build (iOS) | Builds the library and the demo app for iOS |
+| XCFramework | Builds the release XCFramework and runs real operations through the binary |
+
+Two reviewers then comment on the diff: GitHub Copilot, requested automatically, and a Cursor agent that also reports the check results. Neither can approve or merge. Read them, then merge from GitHub yourself.
+
+A release is published only after CI succeeds on `main`, so a merge that breaks the build produces no release.
 
 ---
 

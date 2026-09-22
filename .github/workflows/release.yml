@@ -1,23 +1,39 @@
 name: Release
 
+# Triggered by a successful CI run rather than by the merge itself, so a
+# release can only come from a commit whose tests, iOS build, and XCFramework
+# verification all passed.
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
 
 permissions:
   contents: write
 
+# Version numbers come from the existing tags, so two releases must not be
+# computed at the same time.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     name: XCFramework release
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: Build and publish
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: Scripts/publish-release.sh
