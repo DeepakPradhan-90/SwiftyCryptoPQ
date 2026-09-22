@@ -44,9 +44,17 @@ public enum X25519 {
         }
     }
 
-    /// Performs standard X25519 Diffie-Hellman key exchange.
-    /// Returns the 32-byte shared secret.
-    public static func keyExchange(privateKey: [UInt8], peerPublicKey: [UInt8]) throws -> [UInt8] {
+    /// Performs an X25519 Diffie-Hellman key exchange and yields the 32-byte
+    /// shared secret to `body` without ever copying it into an `Array`.
+    ///
+    /// Prefer this over `keyExchange(privateKey:peerPublicKey:)`. CryptoKit's
+    /// `SharedSecret` manages its own locked, self-zeroing storage, and copying
+    /// the bytes out into a plain `[UInt8]` discards those protections.
+    public static func withSharedSecret<T>(
+        privateKey: [UInt8],
+        peerPublicKey: [UInt8],
+        _ body: (UnsafeRawBufferPointer) throws -> T
+    ) throws -> T {
         guard privateKey.count == 32 else {
             throw X25519Error.invalidPrivateKeyLength
         }
@@ -54,16 +62,27 @@ public enum X25519 {
             throw X25519Error.invalidPublicKeyLength
         }
 
+        let sharedSecret: SharedSecret
         do {
             let privKeyObj = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: privateKey)
             let pubKeyObj = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: peerPublicKey)
-
-            let sharedSecretObj = try privKeyObj.sharedSecretFromKeyAgreement(with: pubKeyObj)
-            let sharedSecretBytes = sharedSecretObj.withUnsafeBytes { Array($0) }
-
-            return sharedSecretBytes
+            sharedSecret = try privKeyObj.sharedSecretFromKeyAgreement(with: pubKeyObj)
         } catch {
             throw X25519Error.keyExchangeFailed
         }
+
+        // Errors thrown by `body` are the caller's, not key agreement failures,
+        // so they propagate rather than being folded into keyExchangeFailed.
+        return try sharedSecret.withUnsafeBytes(body)
+    }
+
+    /// Performs standard X25519 Diffie-Hellman key exchange.
+    /// Returns the 32-byte shared secret.
+    ///
+    /// This materializes the shared secret as an `Array`, which Swift may copy
+    /// beyond your control. Use `withSharedSecret(privateKey:peerPublicKey:_:)`
+    /// where the secret does not need to outlive the call.
+    public static func keyExchange(privateKey: [UInt8], peerPublicKey: [UInt8]) throws -> [UInt8] {
+        try withSharedSecret(privateKey: privateKey, peerPublicKey: peerPublicKey) { Array($0) }
     }
 }

@@ -200,6 +200,55 @@ final class CryptoPQTests: XCTestCase {
         }
     }
 
+    func testX25519SharedSecretAccessors() throws {
+        let (skA, pkA) = try X25519.generateKeyPair()
+        let (skB, pkB) = try X25519.generateKeyPair()
+
+        // The borrowing accessor must agree with the copying one.
+        let copied = try X25519.keyExchange(privateKey: skA, peerPublicKey: pkB)
+        let borrowed = try X25519.withSharedSecret(privateKey: skA, peerPublicKey: pkB) { Array($0) }
+        XCTAssertEqual(copied, borrowed)
+
+        let peer = try X25519.withSharedSecret(privateKey: skB, peerPublicKey: pkA) { Array($0) }
+        XCTAssertEqual(borrowed, peer)
+
+        // Errors thrown by the closure propagate unchanged rather than being
+        // reported as a key agreement failure.
+        struct Sentinel: Error {}
+        XCTAssertThrowsError(
+            try X25519.withSharedSecret(privateKey: skA, peerPublicKey: pkB) { _ in throw Sentinel() }
+        ) { error in
+            XCTAssertTrue(error is Sentinel)
+        }
+
+        XCTAssertThrowsError(try X25519.withSharedSecret(privateKey: [], peerPublicKey: pkB) { _ in }) { error in
+            XCTAssertEqual(error as? X25519Error, .invalidPrivateKeyLength)
+        }
+    }
+
+    // MARK: - Process Hardening
+
+    func testDisableCoreDumps() {
+        // Lowering a soft resource limit is always permitted.
+        XCTAssertTrue(ProcessHardening.disableCoreDumps())
+
+        var limit = rlimit()
+        XCTAssertEqual(getrlimit(RLIMIT_CORE, &limit), 0)
+        XCTAssertEqual(limit.rlim_cur, 0)
+    }
+
+    func testMemoryLocking() {
+        let count = 64
+        let buffer = UnsafeMutableRawPointer.allocate(byteCount: count, alignment: 16)
+        defer { buffer.deallocate() }
+
+        if ProcessHardening.lockMemory(buffer, count: count) {
+            XCTAssertTrue(ProcessHardening.unlockMemory(buffer, count: count))
+        }
+        // mlock can legitimately fail on a limit-constrained host, so a failure
+        // to lock is not treated as a test failure.
+    }
+
     // MARK: - X-Wing Tests
 
     func testXWingRoundTrip() throws {

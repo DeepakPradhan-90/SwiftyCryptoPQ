@@ -87,17 +87,18 @@ public enum XWingX25519 {
     }
 
     /// `Combiner` from §5.3: SHA3-256(ss_M || ss_X || ct_X || pk_X || XWingLabel).
-    private static func combiner(ssM: [UInt8], ssX: [UInt8], ctX: [UInt8], pkX: [UInt8]) -> [UInt8] {
-        var input = [UInt8]()
-        input.reserveCapacity(ssM.count + ssX.count + ctX.count + pkX.count + xwingLabel.count)
-        input.append(contentsOf: ssM)
-        input.append(contentsOf: ssX)
-        input.append(contentsOf: ctX)
-        input.append(contentsOf: pkX)
-        input.append(contentsOf: xwingLabel)
-        defer { wipe(&input) }
-
-        return FIPS202.sha3_256(input)
+    ///
+    /// Absorbed incrementally so that the two shared secrets are never
+    /// concatenated into a single buffer. `ssX` is passed straight through from
+    /// CryptoKit's `SharedSecret` storage.
+    private static func combiner(ssM: [UInt8], ssX: UnsafeRawBufferPointer, ctX: [UInt8], pkX: [UInt8]) -> [UInt8] {
+        var hasher = FIPS202.SHA3_256Hasher()
+        hasher.absorb(ssM)
+        hasher.absorb(ssX)
+        hasher.absorb(ctX)
+        hasher.absorb(pkX)
+        hasher.absorb(xwingLabel)
+        return hasher.finalize()
     }
 
     /// Generates a new X-Wing keypair: a 32-byte decapsulation key and a
@@ -156,14 +157,16 @@ public enum XWingX25519 {
         defer { wipe(&ekX) }
 
         let ctX = try X25519.publicKey(for: ekX)
-        var ssX = try X25519.keyExchange(privateKey: ekX, peerPublicKey: pkX)
-        defer { wipe(&ssX) }
 
         // Propagates the FIPS 203 §7.2 encapsulation key check, as §5.4 requires.
-        var (ssM, ctM) = try MLKEM.encapsulate(publicKey: pkM, mode: .kem768, randomness: Array(eseed[0..<32]))
+        var mlkemRandomness = Array(eseed[0..<32])
+        var (ssM, ctM) = try MLKEM.encapsulate(publicKey: pkM, mode: .kem768, randomness: mlkemRandomness)
+        wipe(&mlkemRandomness)
         defer { wipe(&ssM) }
 
-        let ss = combiner(ssM: ssM, ssX: ssX, ctX: ctX, pkX: pkX)
+        let ss = try X25519.withSharedSecret(privateKey: ekX, peerPublicKey: pkX) { ssX in
+            combiner(ssM: ssM, ssX: ssX, ctX: ctX, pkX: pkX)
+        }
 
         var ct = [UInt8]()
         ct.reserveCapacity(ciphertextLength)
@@ -188,9 +191,9 @@ public enum XWingX25519 {
         var ssM = try MLKEM.decapsulate(ciphertext: ctM, privateKey: expanded.mlkemPrivateKey, mode: .kem768)
         defer { wipe(&ssM) }
 
-        var ssX = try X25519.keyExchange(privateKey: expanded.x25519PrivateKey, peerPublicKey: ctX)
-        defer { wipe(&ssX) }
-
-        return combiner(ssM: ssM, ssX: ssX, ctX: ctX, pkX: expanded.x25519PublicKey)
+        let publicKeyX = expanded.x25519PublicKey
+        return try X25519.withSharedSecret(privateKey: expanded.x25519PrivateKey, peerPublicKey: ctX) { ssX in
+            combiner(ssM: ssM, ssX: ssX, ctX: ctX, pkX: publicKeyX)
+        }
     }
 }

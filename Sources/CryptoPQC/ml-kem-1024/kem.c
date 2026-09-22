@@ -4,6 +4,7 @@
 #include "randombytes.h"
 #include "symmetric.h"
 #include "verify.h"
+#include "pqclean_zeroize.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -51,6 +52,7 @@ int PQCLEAN_MLKEM1024_CLEAN_crypto_kem_keypair(uint8_t *pk,
     uint8_t coins[2 * KYBER_SYMBYTES];
     randombytes(coins, 2 * KYBER_SYMBYTES);
     PQCLEAN_MLKEM1024_CLEAN_crypto_kem_keypair_derand(pk, sk, coins);
+    PQCLEAN_zeroize(coins, sizeof(coins));
     return 0;
 }
 
@@ -89,6 +91,8 @@ int PQCLEAN_MLKEM1024_CLEAN_crypto_kem_enc_derand(uint8_t *ct,
     PQCLEAN_MLKEM1024_CLEAN_indcpa_enc(ct, buf, pk, kr + KYBER_SYMBYTES);
 
     memcpy(ss, kr, KYBER_SYMBYTES);
+    PQCLEAN_zeroize(buf, sizeof(buf));
+    PQCLEAN_zeroize(kr, sizeof(kr));
     return 0;
 }
 
@@ -113,6 +117,7 @@ int PQCLEAN_MLKEM1024_CLEAN_crypto_kem_enc(uint8_t *ct,
     uint8_t coins[KYBER_SYMBYTES];
     randombytes(coins, KYBER_SYMBYTES);
     PQCLEAN_MLKEM1024_CLEAN_crypto_kem_enc_derand(ct, ss, pk, coins);
+    PQCLEAN_zeroize(coins, sizeof(coins));
     return 0;
 }
 
@@ -160,5 +165,8 @@ int PQCLEAN_MLKEM1024_CLEAN_crypto_kem_dec(uint8_t *ss,
     /* Copy true key to return buffer if fail is false */
     PQCLEAN_MLKEM1024_CLEAN_cmov(ss, kr, KYBER_SYMBYTES, (uint8_t) (1 - fail));
 
+    PQCLEAN_zeroize(buf, sizeof(buf));
+    PQCLEAN_zeroize(kr, sizeof(kr));
+    PQCLEAN_zeroize(cmp, sizeof(cmp));
     return 0;
 }

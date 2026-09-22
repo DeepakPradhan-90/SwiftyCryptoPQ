@@ -45,6 +45,20 @@ public enum HybridKEM1024 {
         }
     }
 
+    /// ss = SHA-512(Label || ss_M || ss_X || ct_X || pk_X)
+    ///
+    /// Absorbed incrementally so the two shared secrets are never concatenated
+    /// into a single buffer. `ssX` comes straight from CryptoKit's storage.
+    private static func combiner(ssM: [UInt8], ssX: UnsafeRawBufferPointer, ctX: [UInt8], pkX: [UInt8]) -> [UInt8] {
+        var hasher = SHA512()
+        hasher.update(data: label)
+        hasher.update(data: ssM)
+        hasher.update(bufferPointer: ssX)
+        hasher.update(data: ctX)
+        hasher.update(data: pkX)
+        return Array(hasher.finalize())
+    }
+
     /// Generates a new Hybrid-KEM-1024 keypair.
     public static func generateKeyPair() throws -> KeyPair {
         // 1. Generate ML-KEM-1024 keypair
@@ -84,27 +98,14 @@ public enum HybridKEM1024 {
         var (ekX, ctX) = try X25519.generateKeyPair()
         defer { wipe(&ekX) }
 
-        // 3. Compute X25519 shared secret: ss_X = X25519(ek_X, pk_X)
-        var ssX = try X25519.keyExchange(privateKey: ekX, peerPublicKey: pkX)
-        defer { wipe(&ssX) }
-
-        // 4. Encapsulate ML-KEM-1024: ss_M (32 bytes), ct_M (1568 bytes)
+        // 3. Encapsulate ML-KEM-1024: ss_M (32 bytes), ct_M (1568 bytes)
         var (ssM, ctM) = try MLKEM.encapsulate(publicKey: pkM, mode: .kem1024)
         defer { wipe(&ssM) }
 
-        // 5. Combine the shared secrets using SHA-512:
-        // ss = SHA512(Label || ss_M || ss_X || ct_X || pk_X)
-        var inputBuffer = [UInt8]()
-        inputBuffer.reserveCapacity(label.count + ssM.count + ssX.count + ctX.count + pkX.count)
-        inputBuffer.append(contentsOf: label)
-        inputBuffer.append(contentsOf: ssM)
-        inputBuffer.append(contentsOf: ssX)
-        inputBuffer.append(contentsOf: ctX)
-        inputBuffer.append(contentsOf: pkX)
-
-        let digest = SHA512.hash(data: inputBuffer)
-        let ss = Array(digest)
-        wipe(&inputBuffer)
+        // 4. Combine with the X25519 shared secret ss_X = X25519(ek_X, pk_X)
+        let ss = try X25519.withSharedSecret(privateKey: ekX, peerPublicKey: pkX) { ssX in
+            combiner(ssM: ssM, ssX: ssX, ctX: ctX, pkX: pkX)
+        }
 
         // 6. Construct ciphertext: ct_M (1568 bytes) || ct_X (32 bytes)
         var ct = [UInt8]()
@@ -139,22 +140,9 @@ public enum HybridKEM1024 {
         var ssM = try MLKEM.decapsulate(ciphertext: ctM, privateKey: skM, mode: .kem1024)
         defer { wipe(&ssM) }
 
-        // 4. Compute X25519 shared secret: ss_X = X25519(sk_X, ct_X)
-        var ssX = try X25519.keyExchange(privateKey: skX, peerPublicKey: ctX)
-        defer { wipe(&ssX) }
-
-        // 5. Combine the shared secrets using SHA-512:
-        // ss = SHA512(Label || ss_M || ss_X || ct_X || pk_X)
-        var inputBuffer = [UInt8]()
-        inputBuffer.reserveCapacity(label.count + ssM.count + ssX.count + ctX.count + pkX.count)
-        inputBuffer.append(contentsOf: label)
-        inputBuffer.append(contentsOf: ssM)
-        inputBuffer.append(contentsOf: ssX)
-        inputBuffer.append(contentsOf: ctX)
-        inputBuffer.append(contentsOf: pkX)
-
-        let digest = SHA512.hash(data: inputBuffer)
-        wipe(&inputBuffer)
-        return Array(digest)
+        // 4. Combine with the X25519 shared secret ss_X = X25519(sk_X, ct_X)
+        return try X25519.withSharedSecret(privateKey: skX, peerPublicKey: ctX) { ssX in
+            combiner(ssM: ssM, ssX: ssX, ctX: ctX, pkX: pkX)
+        }
     }
 }

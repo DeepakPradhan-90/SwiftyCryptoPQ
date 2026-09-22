@@ -3,6 +3,7 @@
 #include "params.h"
 #include "poly.h"
 #include "polyvec.h"
+#include "pqclean_zeroize.h"
 #include "randombytes.h"
 #include "symmetric.h"
 #include <stddef.h>
@@ -232,6 +233,10 @@ void PQCLEAN_MLKEM1024_CLEAN_indcpa_keypair_derand(uint8_t pk[KYBER_INDCPA_PUBLI
 
     pack_sk(sk, &skpv);
     pack_pk(pk, &pkpv, publicseed);
+
+    PQCLEAN_zeroize(buf, sizeof(buf));
+    PQCLEAN_zeroize(&skpv, sizeof(skpv));
+    PQCLEAN_zeroize(&e, sizeof(e));
 }
 
 
@@ -292,6 +297,11 @@ void PQCLEAN_MLKEM1024_CLEAN_indcpa_enc(uint8_t c[KYBER_INDCPA_BYTES],
     PQCLEAN_MLKEM1024_CLEAN_poly_reduce(&v);
 
     pack_ciphertext(c, &b, &v);
+
+    PQCLEAN_zeroize(&sp, sizeof(sp));
+    PQCLEAN_zeroize(&ep, sizeof(ep));
+    PQCLEAN_zeroize(&epp, sizeof(epp));
+    PQCLEAN_zeroize(&k, sizeof(k));
 }
 
 /*************************************************
@@ -324,4 +334,7 @@ void PQCLEAN_MLKEM1024_CLEAN_indcpa_dec(uint8_t m[KYBER_INDCPA_MSGBYTES],
     PQCLEAN_MLKEM1024_CLEAN_poly_reduce(&mp);
 
     PQCLEAN_MLKEM1024_CLEAN_poly_tomsg(m, &mp);
+
+    PQCLEAN_zeroize(&skpv, sizeof(skpv));
+    PQCLEAN_zeroize(&mp, sizeof(mp));
 }

@@ -213,8 +213,45 @@ control both endpoints and want an ML-KEM-1024 hybrid; everyone else should use 
 - X25519 comes from `CryptoKit`, which throws when a key agreement produces the all-zero
   shared secret. X-Wing does not require that check, so a peer deliberately sending a
   low-order `ct_X` causes an error here rather than a distinct shared secret.
-- Secret material held in `[UInt8]` is wiped with `memset_s` once it is no longer needed, but
-  Swift may have made copies before then. This is not a substitute for the Secure Enclave.
+---
+
+## Handling of secret material
+
+Secrets are cleared at three levels.
+
+**In the C code.** Upstream PQClean never scrubs its stack buffers, so seeds, secret
+polynomial vectors, decrypted messages, and derived shared secrets stay resident after every
+call, and the Keccak sponge state is freed without being cleared. The vendored sources are
+patched to zero those locals as they die; see [patches/README.md](patches/README.md) for the
+exact sites and for how to re-apply the patch after a PQClean update.
+
+**In the Swift code.** Hybrid combiners absorb their inputs incrementally rather than
+concatenating shared secrets into one buffer, and X25519 shared secrets are read directly out
+of CryptoKit's self-zeroing `SharedSecret` storage via
+`X25519.withSharedSecret(privateKey:peerPublicKey:_:)`. Remaining intermediates are wiped
+through `memset_s` routed so the optimizer cannot discard it.
+
+**In your process.** `ProcessHardening.disableCoreDumps()` prevents a crash from writing key
+material to disk, and `lockMemory`/`unlockMemory` pin long-lived keys out of swap. Both are
+opt-in; call them during startup, before any keys exist.
+
+### Threat model
+
+These measures defend against *post-hoc* memory disclosure: core dumps, crash reports, swap
+files, and reused heap pages. They do **not** defend against an attacker with live access to
+the running process or a debugger on a jailbroken device.
+
+Residual exposure you should know about:
+
+- Wiping a Swift `[UInt8]` is best effort. `withUnsafeMutableBytes` requires a uniquely
+  referenced buffer, so if the array shares storage, copy-on-write hands back a fresh buffer
+  and the wipe scrubs the copy while the original survives. Public API that returns secrets as
+  `[UInt8]` hands the caller a copy this package cannot reach.
+- The compiler may still spill intermediate values to registers or stack slots that no
+  `memset` can reach, and iOS memory compression is outside application control.
+- None of this substitutes for hardware-backed keys. Prefer storing the 32-byte X-Wing seed in
+  the Keychain with `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, or wrapped under a Secure
+  Enclave key, and keep session keys ephemeral.
 
 ---
 

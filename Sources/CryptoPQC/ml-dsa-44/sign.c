@@ -6,6 +6,7 @@
 #include "randombytes.h"
 #include "sign.h"
 #include "symmetric.h"
+#include "pqclean_zeroize.h"
 #include <stdint.h>
 
 /*************************************************
@@ -63,6 +64,11 @@ int PQCLEAN_MLDSA44_CLEAN_crypto_sign_keypair(uint8_t *pk, uint8_t *sk) {
     shake256(tr, TRBYTES, pk, PQCLEAN_MLDSA44_CLEAN_CRYPTO_PUBLICKEYBYTES);
     PQCLEAN_MLDSA44_CLEAN_pack_sk(sk, rho, tr, key, &t0, &s1, &s2);
 
+    PQCLEAN_zeroize(seedbuf, sizeof(seedbuf));
+    PQCLEAN_zeroize(&s1, sizeof(s1));
+    PQCLEAN_zeroize(&s1hat, sizeof(s1hat));
+    PQCLEAN_zeroize(&s2, sizeof(s2));
+    PQCLEAN_zeroize(&t0, sizeof(t0));
     return 0;
 }
 
@@ -191,6 +197,14 @@ rej:
     /* Write signature */
     PQCLEAN_MLDSA44_CLEAN_pack_sig(sig, sig, &z, &h);
     *siglen = PQCLEAN_MLDSA44_CLEAN_CRYPTO_BYTES;
+
+    PQCLEAN_zeroize(seedbuf, sizeof(seedbuf));
+    PQCLEAN_zeroize(&s1, sizeof(s1));
+    PQCLEAN_zeroize(&s2, sizeof(s2));
+    PQCLEAN_zeroize(&t0, sizeof(t0));
+    PQCLEAN_zeroize(&y, sizeof(y));
+    PQCLEAN_zeroize(&w0, sizeof(w0));
+    PQCLEAN_zeroize(&cp, sizeof(cp));
     return 0;
 }
 

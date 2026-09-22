@@ -6,6 +6,7 @@
 
 #include "compat.h"
 #include "fips202.h"
+#include "pqclean_zeroize.h"
 #include "randombytes.h"
 #include "sha2.h"
 
