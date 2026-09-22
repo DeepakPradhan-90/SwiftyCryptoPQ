@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import CryptoPQC
 
 /// FIPS 202 primitives, backed by the vendored reference implementation so that
@@ -67,4 +68,40 @@ func wipe(_ bytes: inout [UInt8]) {
 func withWiped<T>(_ bytes: inout [UInt8], _ body: ([UInt8]) throws -> T) rethrows -> T {
     defer { wipe(&bytes) }
     return try body(bytes)
+}
+
+/// Heap storage for secret key material that clears itself when the last
+/// reference goes away.
+///
+/// Holding the bytes in a class rather than inline in a struct means copying
+/// the enclosing value copies a reference, not the secret, so there is exactly
+/// one buffer to wipe and copy-on-write can never strand a stale duplicate.
+/// The contents are never mutated after `init`, which is what makes the
+/// unchecked `Sendable` conformance sound.
+final class SecretBytes: @unchecked Sendable {
+    private var storage: [UInt8]
+
+    init(_ bytes: [UInt8]) {
+        storage = bytes
+    }
+
+    var count: Int { storage.count }
+
+    func withBytes<T>(_ body: ([UInt8]) throws -> T) rethrows -> T {
+        try body(storage)
+    }
+
+    deinit {
+        wipe(&storage)
+    }
+}
+
+/// Moves `bytes` into a `SymmetricKey`, whose storage CryptoKit locks and
+/// zeroes on deallocation, and wipes the transient array on the way out.
+///
+/// One short-lived wiped copy is unavoidable because the PQClean entry points
+/// write into a caller-supplied buffer.
+func makeSymmetricKey(consuming bytes: inout [UInt8]) -> SymmetricKey {
+    defer { wipe(&bytes) }
+    return SymmetricKey(data: bytes)
 }

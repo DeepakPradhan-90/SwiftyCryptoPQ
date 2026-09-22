@@ -59,6 +59,23 @@ public enum HybridKEM1024 {
         return Array(hasher.finalize())
     }
 
+    /// Recovers the public key from a private key.
+    ///
+    /// `sk = sk_M || sk_X || pk_X`, and `pk_M` is embedded in the ML-KEM
+    /// decapsulation key `sk_M`, so nothing has to be recomputed.
+    public static func embeddedPublicKey(inPrivateKey privateKey: [UInt8]) throws -> [UInt8] {
+        guard privateKey.count == privateKeyLength else {
+            throw HybridKEM1024Error.invalidPrivateKeyLength
+        }
+
+        var skM = Array(privateKey[0..<mlkemPrivateKeyLength])
+        defer { wipe(&skM) }
+
+        let pkM = try MLKEM.embeddedPublicKey(inPrivateKey: skM, mode: .kem1024)
+        let pkX = Array(privateKey[(mlkemPrivateKeyLength + x25519KeyLength)..<privateKeyLength])
+        return pkM + pkX
+    }
+
     /// Generates a new Hybrid-KEM-1024 keypair.
     public static func generateKeyPair() throws -> KeyPair {
         // 1. Generate ML-KEM-1024 keypair

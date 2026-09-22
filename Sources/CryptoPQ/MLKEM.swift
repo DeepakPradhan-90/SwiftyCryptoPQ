@@ -92,6 +92,16 @@ public enum MLKEM {
         }
     }
 
+    /// Extracts the encapsulation key embedded in a decapsulation key.
+    ///
+    /// FIPS 203 stores `dk = dk_PKE || ek || H(ek) || z`, so no recomputation is
+    /// needed. The decapsulation key is validated first.
+    public static func embeddedPublicKey(inPrivateKey privateKey: [UInt8], mode: Mode) throws -> [UInt8] {
+        try validate(privateKey: privateKey, mode: mode)
+        let ekStart = 384 * mode.rank
+        return Array(privateKey[ekStart..<(ekStart + mode.publicKeyLength)])
+    }
+
     /// FIPS 203 §7.3 decapsulation key check: the embedded H(ek) must match the
     /// embedded encapsulation key.
     public static func validate(privateKey: [UInt8], mode: Mode) throws {

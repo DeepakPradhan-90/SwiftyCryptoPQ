@@ -63,6 +63,68 @@ targets: [
 
 ## Usage
 
+There are two layers. The **typed key API** under `PQ` is what you should normally use: it
+returns shared secrets as CryptoKit `SymmetricKey` values, validates keys on decode, and keeps
+private keys in self-clearing storage. The **primitive layer** underneath (`MLKEM`, `MLDSA`,
+`XWingX25519`, `HybridKEM1024`) works in `[UInt8]` and exposes derandomized entry points for
+known-answer testing.
+
+### Typed key API
+
+```swift
+import CryptoPQ
+
+// Recipient generates a key pair. Available families are PQ.MLKEM768,
+// PQ.MLKEM1024, PQ.XWing, and PQ.HybridMLKEM1024X25519.
+let privateKey = try PQ.XWing.PrivateKey()
+let publicKey = privateKey.publicKey            // .rawRepresentation is safe to publish
+
+// Sender encapsulates. The secret is a CryptoKit SymmetricKey, ready for
+// HKDF or AES.GCM without any byte shuffling.
+let sealed = try publicKey.encapsulateSharedSecret()
+let key = HKDF<SHA256>.deriveKey(inputKeyMaterial: sealed.sharedSecret, outputByteCount: 32)
+
+// Recipient recovers the same secret from the ciphertext.
+let recovered = try privateKey.decapsulate(sealed.ciphertext)
+assert(sealed.sharedSecret == recovered)
+
+// Persist the private key without holding a copy yourself.
+try privateKey.withUnsafeRawRepresentation { bytes in
+    try storeInKeychain(bytes)                  // 32 bytes for PQ.XWing
+}
+```
+
+Decoding a public key runs the FIPS 203 §7.2 modulus check, and decoding a private key runs
+the §7.3 hash check, so malformed keys are rejected at the boundary rather than used.
+
+### CryptoKit `KEM` conformance
+
+On iOS 17+/macOS 14+, every family conforms to CryptoKit's `KEMPublicKey` and `KEMPrivateKey`,
+so these keys drop into generic code written against CryptoKit rather than against this
+package:
+
+```swift
+func establish<K: KEMPrivateKey>(using privateKey: K) throws -> SymmetricKey {
+    let result = try privateKey.publicKey.encapsulate()   // KEM.EncapsulationResult
+    return try privateKey.decapsulate(result.encapsulated)
+}
+
+let secret = try establish(using: PQ.MLKEM768.PrivateKey())
+```
+
+Below iOS 17 the same types work through `encapsulateSharedSecret()` and `decapsulate(_:)`;
+only the protocol conformance is version-gated.
+
+The names under `PQ` mirror CryptoKit's own `MLKEM768`, `MLKEM1024`, and
+`XWingMLKEM768X25519`, which arrive in iOS 26. The encodings are the same standards, and the
+test suite verifies that ciphertexts cross between this package and CryptoKit's native
+ML-KEM-768 in both directions — so raising your deployment target later is mostly a matter of
+dropping the `PQ.` prefix.
+
+---
+
+## Primitive layer
+
 ### 1. ML-DSA (Digital Signatures)
 
 Generate keypairs, sign messages, and verify signatures with ML-DSA-44, 65, or 87.
@@ -231,6 +293,12 @@ of CryptoKit's self-zeroing `SharedSecret` storage via
 `X25519.withSharedSecret(privateKey:peerPublicKey:_:)`. Remaining intermediates are wiped
 through `memset_s` routed so the optimizer cannot discard it.
 
+**In the typed API.** Shared secrets are returned as CryptoKit `SymmetricKey`, whose storage
+is locked and zeroed on deallocation, so the secret is never handed to you as an array you
+have to remember to wipe. Private keys live in a reference-counted box that clears itself when
+the last copy goes away, and `withUnsafeRawRepresentation` scopes access to a closure rather
+than vending a copy.
+
 **In your process.** `ProcessHardening.disableCoreDumps()` prevents a crash from writing key
 material to disk, and `lockMemory`/`unlockMemory` pin long-lived keys out of swap. Both are
 opt-in; call them during startup, before any keys exist.
@@ -245,8 +313,12 @@ Residual exposure you should know about:
 
 - Wiping a Swift `[UInt8]` is best effort. `withUnsafeMutableBytes` requires a uniquely
   referenced buffer, so if the array shares storage, copy-on-write hands back a fresh buffer
-  and the wipe scrubs the copy while the original survives. Public API that returns secrets as
-  `[UInt8]` hands the caller a copy this package cannot reach.
+  and the wipe scrubs the copy while the original survives. The primitive layer returns
+  secrets as `[UInt8]`, handing the caller a copy this package cannot reach; the typed `PQ`
+  API avoids this and is the safer default.
+- Even in the typed API, PQClean writes the shared secret into a caller-supplied buffer, so
+  one short-lived array exists between the C call and the `SymmetricKey`. It is wiped
+  immediately, but it does exist.
 - The compiler may still spill intermediate values to registers or stack slots that no
   `memset` can reach, and iOS memory compression is outside application control.
 - None of this substitutes for hardware-backed keys. Prefer storing the 32-byte X-Wing seed in
