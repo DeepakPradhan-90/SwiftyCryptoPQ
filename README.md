@@ -68,7 +68,12 @@ To build from source instead, depend on the `main` branch:
 | Build (iOS) | Builds the library and the demo app for iOS |
 | XCFramework | Builds the release XCFramework and runs real operations through the binary |
 
-Two reviewers then comment on the diff: GitHub Copilot, requested automatically, and a Cursor agent that also reports the check results. Neither can approve or merge. Read them, then merge from GitHub yourself.
+Two reviewers then comment on the diff: GitHub Copilot, requested automatically by a repository ruleset, and a Cursor agent that also reports the check results. Neither can approve or merge. Read them, then merge from GitHub yourself.
+
+Both reviewers need to be provisioned, and the pull request still works without them:
+
+- The Cursor agent needs a `CURSOR_API_KEY` repository secret. Without it the job posts the check results and says the agent did not run.
+- Copilot code review needs Copilot Pro or above on the account opening the pull request. Copilot Free does not include it, and the request is silently dropped rather than failing.
 
 A release is published only after CI succeeds on `main`, so a merge that breaks the build produces no release.
 
