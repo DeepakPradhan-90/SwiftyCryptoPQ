@@ -79,6 +79,8 @@ A release is published only after CI succeeds on `main`, so a merge that breaks 
 
 A merge is also skipped unless it touches something that can change the published package: `Sources/`, `patches/`, `Package.swift`, `Scripts/make-xcframework.sh`, `LICENSE`, or `NOTICE`. Changes to tests, examples, documentation, or CI therefore do not consume a version number. The release job names the files it disregarded in its summary, so a skip is never silent — if you add a new source location, add it to `RELEVANT` in `Scripts/publish-release.sh`.
 
+Some changes alter how the package is assembled rather than what it contains, and no path rule can see them. Run the Release workflow by hand from the Actions tab to publish one; it skips the path rule but still builds and verifies the XCFramework before publishing anything.
+
 ---
 
 ## Usage

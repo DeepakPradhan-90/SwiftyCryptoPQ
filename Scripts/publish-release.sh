@@ -48,7 +48,9 @@ RELEASED_SHA="$(printf '%s\n' "$RELEASE_BODIES" |
 # With no previous release there is no baseline to compare against, and the
 # first release has to happen regardless. A baseline that is missing from the
 # history, after a force push say, is treated the same way.
-if [ -n "$RELEASED_SHA" ] && git cat-file -e "${RELEASED_SHA}^{commit}" 2>/dev/null; then
+if [ "${FORCE:-false}" = "true" ]; then
+  note "Publishing regardless of which paths changed, because this run was started by hand."
+elif [ -n "$RELEASED_SHA" ] && git cat-file -e "${RELEASED_SHA}^{commit}" 2>/dev/null; then
   CHANGED="$(git diff --name-only "$RELEASED_SHA" "$SOURCE_SHA")"
   if ! printf '%s\n' "$CHANGED" | grep -qE "$RELEVANT"; then
     note "No release: nothing that affects the published package changed since ${RELEASED_SHA}. Disregarded $(printf '%s' "$CHANGED" | tr '\n' ' ')"
