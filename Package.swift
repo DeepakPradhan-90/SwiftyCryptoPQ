@@ -28,16 +28,25 @@ let package = Package(
             dependencies: ["CryptoPQC"],
             path: "Sources/CryptoPQ"
         ),
-        .executableTarget(
-            name: "CryptoPQExample",
-            dependencies: ["CryptoPQ"],
-            path: "Sources/CryptoPQExample"
-        ),
         .testTarget(
             name: "CryptoPQTests",
             dependencies: ["CryptoPQ"],
             path: "Tests/CryptoPQTests",
             resources: [.copy("Vectors")]
+        ),
+
+        // Demonstration code, kept out of Sources so that nothing a consumer
+        // builds depends on it. The usage tests compile the snippets printed in
+        // the README, so the documentation cannot drift.
+        .executableTarget(
+            name: "CryptoPQExample",
+            dependencies: ["CryptoPQ"],
+            path: "Examples/CryptoPQExample"
+        ),
+        .testTarget(
+            name: "CryptoPQUsageTests",
+            dependencies: ["CryptoPQ"],
+            path: "Examples/UsageTests"
         )
     ]
 )

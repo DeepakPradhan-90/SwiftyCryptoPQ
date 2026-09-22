@@ -57,11 +57,11 @@ enum AEADHelper {
 // MARK: - Execution Main Entry
 func runDemo() {
     print("================================================================================")
-    print("     SwiftyBoringSSL - Post-Quantum Hybrid Cryptography Demonstration")
+    print("      SwiftyCryptoPQ - Post-Quantum Hybrid Cryptography Demonstration")
     print("================================================================================")
 
     let secretMessage = "Confidential: Meet at midnight under the post-quantum umbrella."
-    let salt = [UInt8]("SwiftyBoringSSL-KDF-Salt".utf8)
+    let salt = [UInt8]("SwiftyCryptoPQ-KDF-Salt".utf8)
     let info = [UInt8]("Session-Keys-Binding-Info".utf8)
     let associatedData = [UInt8]("AEAD-Context-Binding-v1".utf8)
 

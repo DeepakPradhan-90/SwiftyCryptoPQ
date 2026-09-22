@@ -115,7 +115,15 @@ abstraction.
 
 A KEM gives you a shared secret, not a cipher, so both examples below run the secret through
 HKDF and encrypt with AES-GCM. Both are the [tested
-code](Tests/CryptoPQTests/DocumentedUsageTests.swift) rather than a sketch.
+code](Examples/UsageTests/DocumentedUsageTests.swift) rather than a sketch.
+
+Everything demonstrative lives in [Examples/](Examples) rather than under `Sources`, so
+nothing a consumer builds depends on it. `Examples/UsageTests` compiles and runs the snippets
+below as a test target, and `Examples/CryptoPQExample` is a runnable end-to-end walkthrough:
+
+```sh
+swift run CryptoPQExample
+```
 
 ### Below iOS 17 — end-to-end with AES-GCM
 
