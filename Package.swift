@@ -35,14 +35,8 @@ let package = Package(
             resources: [.copy("Vectors")]
         ),
 
-        // Demonstration code, kept out of Sources so that nothing a consumer
-        // builds depends on it. The usage tests compile the snippets printed in
-        // the README, so the documentation cannot drift.
-        .executableTarget(
-            name: "CryptoPQExample",
-            dependencies: ["CryptoPQ"],
-            path: "Examples/CryptoPQExample"
-        ),
+        // Compiles the snippets printed in the README, so the documentation
+        // cannot drift. The iOS walkthrough lives in Examples/CryptoPQDemo.
         .testTarget(
             name: "CryptoPQUsageTests",
             dependencies: ["CryptoPQ"],

@@ -117,13 +117,16 @@ A KEM gives you a shared secret, not a cipher, so both examples below run the se
 HKDF and encrypt with AES-GCM. Both are the [tested
 code](Tests/CryptoPQUsageTests/DocumentedUsageTests.swift) rather than a sketch.
 
-Everything demonstrative lives in [Examples/](Examples) rather than under `Sources`, so
-nothing a consumer builds depends on it. The README snippets are backed by
-`Tests/CryptoPQUsageTests` so the documentation is compiled and run in CI, and
-`Examples/CryptoPQExample` is a runnable end-to-end walkthrough:
+The README snippets are backed by `Tests/CryptoPQUsageTests`, so the documentation is
+compiled and run in CI.
+
+The same flow is also an iOS app at [Examples/CryptoPQDemo](Examples/CryptoPQDemo). It
+encrypts and decrypts a message with AES-GCM or ChaCha20-Poly1305, using ML-KEM-768,
+ML-KEM-1024, or X-Wing for the shared secret, and ML-DSA-65 to sign the ciphertext.
+Open it in Xcode and run it on a simulator:
 
 ```sh
-swift run CryptoPQExample
+open Examples/CryptoPQDemo/CryptoPQDemo.xcodeproj
 ```
 
 ### Below iOS 17 — end-to-end with AES-GCM
