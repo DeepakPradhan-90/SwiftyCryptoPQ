@@ -115,11 +115,12 @@ abstraction.
 
 A KEM gives you a shared secret, not a cipher, so both examples below run the secret through
 HKDF and encrypt with AES-GCM. Both are the [tested
-code](Examples/UsageTests/DocumentedUsageTests.swift) rather than a sketch.
+code](Tests/CryptoPQUsageTests/DocumentedUsageTests.swift) rather than a sketch.
 
 Everything demonstrative lives in [Examples/](Examples) rather than under `Sources`, so
-nothing a consumer builds depends on it. `Examples/UsageTests` compiles and runs the snippets
-below as a test target, and `Examples/CryptoPQExample` is a runnable end-to-end walkthrough:
+nothing a consumer builds depends on it. The README snippets are backed by
+`Tests/CryptoPQUsageTests` so the documentation is compiled and run in CI, and
+`Examples/CryptoPQExample` is a runnable end-to-end walkthrough:
 
 ```sh
 swift run CryptoPQExample

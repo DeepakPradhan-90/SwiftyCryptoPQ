@@ -46,7 +46,7 @@ let package = Package(
         .testTarget(
             name: "CryptoPQUsageTests",
             dependencies: ["CryptoPQ"],
-            path: "Examples/UsageTests"
+            path: "Tests/CryptoPQUsageTests"
         )
     ]
 )
