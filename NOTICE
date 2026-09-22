@@ -1,0 +1,58 @@
+SwiftyCryptoPQ
+Copyright 2026 Deepak Pradhan
+
+This product includes software developed by third parties, as described below.
+The Apache License 2.0 in the LICENSE file applies to the Swift sources in
+Sources/CryptoPQ and to the code in Sources/CryptoPQC that is original to this
+project (include/CryptoPQC.h and common/randombytes_apple.c).
+
+--------------------------------------------------------------------------------
+PQClean
+--------------------------------------------------------------------------------
+
+The ML-KEM (FIPS 203) and ML-DSA (FIPS 204) reference implementations in
+Sources/CryptoPQC, together with the FIPS 202 (Keccak) and SHA-2 code in
+Sources/CryptoPQC/common, are taken from PQClean:
+
+    https://github.com/PQClean/PQClean
+
+These files are released into the public domain under CC0 1.0:
+
+    https://creativecommons.org/share-your-work/public-domain/cc0/
+
+Per-scheme LICENSE files are retained alongside the sources they cover. The
+Keccak and SHA-2 implementations are public-domain code whose original authors
+are credited in comments at the top of the respective files:
+
+  * common/fips202.c derives from the public-domain crypto_hash/keccakc512/simple
+    implementation by Ronny Van Keer, and from the public-domain "TweetFips202"
+    implementation by Gilles Van Assche, Daniel J. Bernstein, and Peter Schwabe.
+
+  * common/sha2.c derives from the public-domain crypto_hash/sha512/ref
+    implementation by D. J. Bernstein.
+
+--------------------------------------------------------------------------------
+NIST ACVP test vectors
+--------------------------------------------------------------------------------
+
+Tests/CryptoPQTests/Vectors/acvp.json contains a subset of the ML-KEM and ML-DSA
+known-answer vectors published by NIST in the ACVP server repository:
+
+    https://github.com/usnistgov/ACVP-Server
+
+This material was prepared by employees of the U.S. National Institute of
+Standards and Technology and is not subject to copyright protection in the
+United States.
+
+--------------------------------------------------------------------------------
+X-Wing test vectors
+--------------------------------------------------------------------------------
+
+Tests/CryptoPQTests/Vectors/xwing.json contains the Appendix C test vectors from
+draft-connolly-cfrg-xwing-kem-10:
+
+    https://datatracker.ietf.org/doc/html/draft-connolly-cfrg-xwing-kem
+
+Copyright (c) 2026 IETF Trust and the persons identified as authors of the
+document. Extracted as a Code Component and used under the Revised BSD License
+set out in the IETF Trust Legal Provisions.
