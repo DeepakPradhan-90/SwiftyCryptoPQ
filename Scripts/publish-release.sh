@@ -14,7 +14,7 @@ cd "$ROOT"
 
 REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-if gh release list --limit 200 --json body --jq ".[].body" | grep -F "Source-SHA: ${GITHUB_SHA}" >/dev/null; then
+if gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[].body' | grep -F "Source-SHA: ${GITHUB_SHA}" >/dev/null; then
   echo "Release already exists for ${GITHUB_SHA}"
   exit 0
 fi
@@ -88,7 +88,8 @@ EOF
 GIT="$STAGE/git"
 git init -b binary "$GIT"
 cd "$GIT"
-if git fetch "$REMOTE" binary; then
+if git ls-remote --exit-code --heads "$REMOTE" binary >/dev/null; then
+  git fetch "$REMOTE" binary
   git checkout -B binary FETCH_HEAD
 fi
 cp "$STAGE/Package.swift" "$ROOT/LICENSE" .
@@ -104,6 +105,6 @@ gh release create "$VERSION" "$STAGE/CryptoPQ.xcframework.zip" \
   --repo "$GITHUB_REPOSITORY" \
   --title "$VERSION" \
   --notes-file "$NOTES" \
-  --target "$VERSION"
+  --target "$(git rev-parse HEAD)"
 
 echo "Published ${VERSION}"
